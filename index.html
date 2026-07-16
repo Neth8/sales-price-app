@@ -110,7 +110,7 @@ h1 {
   padding: 18px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 .card::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0; height: 100%;
@@ -125,7 +125,7 @@ h1 {
 
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.field { margin-bottom: 12px; }
+.field { margin-bottom: 12px; position: relative; }
 
 label { display: block; color: var(--mut); font-weight: 700; font-size: 12px; margin-bottom: 6px; letter-spacing: 0.3px; }
 
@@ -137,6 +137,20 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9, 174, 226, 0.2); background: #081324;
 }
+
+/* Suggestion Container Box styling */
+.suggest-box {
+  position: absolute; top: 100%; left: 0; right: 0; background: #0d1f38;
+  border: 1px solid var(--line); border-radius: 10px; max-height: 220px;
+  overflow-y: auto; z-index: 999; box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+  display: none; animation: fadeIn 0.2s ease; margin-top: 4px;
+}
+.suggest-item {
+  padding: 11px 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 13.5px; transition: var(--transition); color: #e1efff;
+}
+.suggest-item:hover { background: #162f52; color: #fff; padding-left: 18px; }
+.suggest-item:last-child { border-bottom: 0; }
 
 textarea { min-height: 75px; resize: vertical; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -248,8 +262,21 @@ tr:last-child td { border-bottom: 0; }
 
  <section id="calc" class="sec on"><div class="grid">
   <div class="card"><h2 class="title">Input <span class="pill" id="ver">Initial Data</span></h2>
-   <div class="row"><div class="field"><label>Customer</label><select id="customer"></select></div><div class="field"><label>Price Category</label><select id="category"></select></div></div>
-   <div class="field"><label>Item</label><select id="item"></select></div>
+   <div class="row">
+     <div class="field">
+       <label>Customer</label>
+       <input type="text" id="cust_input" placeholder="Type customer name..." oninput="filterCustomers()" onfocus="showCustomers()">
+       <input type="hidden" id="customer" value="walk">
+       <div id="cust_suggest" class="suggest-box"></div>
+     </div>
+     <div class="field"><label>Price Category</label><select id="category"></select></div>
+   </div>
+   <div class="field">
+     <label>Item</label>
+     <input type="text" id="item_input" placeholder="Type item description..." oninput="filterItems()" onfocus="showItems()">
+     <input type="hidden" id="item">
+     <div id="item_suggest" class="suggest-box"></div>
+   </div>
    <div class="row3"><div class="field"><label>Qty / Rolls</label><input id="qty" type="number" value="100"></div><div class="field"><label>Selling Price / Roll</label><input id="price" class="blueinput" type="number" step="0.01"></div><div class="field"><label>Commission %</label><input id="comm" type="number" step="0.01" value="50"></div></div>
    <div class="row"><div class="field"><label>Target Sales Value</label><input id="target" type="number" value="250000"></div><div class="field"><label>Cash / Credit Note</label><select id="paynote"><option>Cash</option><option>Credit</option><option>Advance Payment</option><option>Balance Pending</option></select></div></div>
    <div class="matrix" id="matrix"></div>
@@ -355,7 +382,7 @@ async function fetchFromBPOS(){
           h: 0,
           ups: 1,
           pcs: p.stock_quantity || 0,
-          min: sysVal * 0.82, // Auto-calibration rule for standard items
+          min: sysVal * 0.82, 
           sys: sysVal,
           cost: null
         };
@@ -378,15 +405,61 @@ function cust(){let v=document.getElementById('customer').value;return v=='walk'
 function cat(){return data.cats.find(x=>x.id==document.getElementById('category').value)||data.cats[2]}
 function priceAt(it,ct){return n(it.min)+(n(it.sys)-n(it.min))*n(ct.pct)/100}
 
+/* Smart Suggestion Logic Controls */
+function showCustomers() {
+  let box = document.getElementById('cust_suggest');
+  let val = document.getElementById('cust_input').value.toLowerCase();
+  let arr = [{id:'walk', name:'Walk-in Customer'}].concat(data.cust);
+  let html = arr.filter(c => c.name.toLowerCase().includes(val))
+                .map(c => `<div class="suggest-item" onclick="selectCustomer('${c.id}', '${esc(c.name)}')">${esc(c.name)}</div>`).join('');
+  box.innerHTML = html; box.style.display = html ? 'block' : 'none';
+}
+function filterCustomers() { showCustomers(); }
+function selectCustomer(id, name) {
+  document.getElementById('customer').value = id;
+  document.getElementById('cust_input').value = name;
+  document.getElementById('cust_suggest').style.display = 'none';
+  let c = cust(); if(c.cat) document.getElementById('category').value = c.cat;
+  applyCat();
+}
+
+function showItems() {
+  let box = document.getElementById('item_suggest');
+  let val = document.getElementById('item_input').value.toLowerCase();
+  let html = data.items.filter(i => i.name.toLowerCase().includes(val))
+                .map(i => `<div class="suggest-item" onclick="selectItem('${i.id}', '${esc(i.name)}')">${esc(i.name)}</div>`).join('');
+  box.innerHTML = html; box.style.display = html ? 'block' : 'none';
+}
+function filterItems() { showItems(); }
+function selectItem(id, name) {
+  document.getElementById('item').value = id;
+  document.getElementById('item_input').value = name;
+  document.getElementById('item_suggest').style.display = 'none';
+  renderCatOptions();
+  applyCat();
+}
+
+// Global click alignment to close open suggestions boxes safely
+document.addEventListener('click', function(e) {
+  if(!e.target.closest('#cust_suggest') && e.target.id !== 'cust_input') { document.getElementById('cust_suggest').style.display = 'none'; }
+  if(!e.target.closest('#item_suggest') && e.target.id !== 'item_input') { document.getElementById('item_suggest').style.display = 'none'; }
+});
+
 function init(){
   if(!data.items || data.items.length === 0) data.items = baseItems;
-  document.getElementById('item').innerHTML=data.items.map(i=>`<option value="${esc(i.id)}">${esc(i.name)}</option>`).join('');
+  
+  // Set default initial labels for suggestion inputs
+  if(!document.getElementById('item').value && data.items[0]) {
+    document.getElementById('item').value = data.items[0].id;
+    document.getElementById('item_input').value = data.items[0].name;
+  }
+  if(document.getElementById('customer').value === 'walk') {
+    document.getElementById('cust_input').value = 'Walk-in Customer';
+  }
+
   renderCatOptions();
-  renderCustOptions();
   document.getElementById('comm').value=data.defcomm||50;
   save();
-  document.getElementById('item').onchange=()=>{renderCatOptions();applyCat()};
-  document.getElementById('customer').onchange=()=>{let c=cust();if(c.cat)document.getElementById('category').value=c.cat;applyCat()};
   document.getElementById('category').onchange=applyCat;
   ['qty','price','comm','target','paynote'].forEach(x=>document.getElementById(x).oninput=calc);
   applyCat();
@@ -399,10 +472,6 @@ function renderCatOptions(){
   let html=data.cats.map(c=>`<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)} - Rs.${m(priceAt(it,c))}</option>`).join('');
   document.getElementById('category').innerHTML=html;
   document.getElementById('ccat').innerHTML=data.cats.map(c=>`<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)} (${c.pct}%)</option>`).join('')}
-
-function renderCustOptions(){
-  document.getElementById('customer').innerHTML='<option value="walk">Walk-in Customer</option>'+data.cust.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')
-}
 
 function applyCat(){let it=item(),ct=cat();if(!it)return;document.getElementById('price').value=priceAt(it,ct).toFixed(2);calc()}
 
@@ -469,7 +538,7 @@ function renderCash(){}
 
 function saveCustomer(){
   let c={id:cid.value||id('cu'),name:cname.value,phone:cphone.value,biz:cbiz.value,cat:ccat.value,addr:caddr.value,note:cnote.value};
-  data.cust.push(c);save();clearCustomer();renderCustOptions();renderCustomers();
+  data.cust.push(c);save();clearCustomer();showCustomers();renderCustomers();
 }
 function renderCustomers(){
   custbody.innerHTML=data.cust.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td>${esc(c.biz)}</td><td>Standard</td><td>-</td><td>Verified</td></tr>`).join('');
