@@ -266,7 +266,7 @@ tr:last-child td { border-bottom: 0; }
      <div class="field">
        <label>Customer</label>
        <input type="text" id="cust_input" placeholder="Type customer name..." oninput="filterCustomers()" onfocus="showCustomers()">
-       <input type="hidden" id="customer" value="walk">
+       <input type="hidden" id="customer" value="">
        <div id="cust_suggest" class="suggest-box"></div>
      </div>
      <div class="field"><label>Price Category</label><select id="category"></select></div>
@@ -274,7 +274,7 @@ tr:last-child td { border-bottom: 0; }
    <div class="field">
      <label>Item</label>
      <input type="text" id="item_input" placeholder="Type item description..." oninput="filterItems()" onfocus="showItems()">
-     <input type="hidden" id="item">
+     <input type="hidden" id="item" value="">
      <div id="item_suggest" class="suggest-box"></div>
    </div>
    <div class="row3"><div class="field"><label>Qty / Rolls</label><input id="qty" type="number" value="100"></div><div class="field"><label>Selling Price / Roll</label><input id="price" class="blueinput" type="number" step="0.01"></div><div class="field"><label>Commission %</label><input id="comm" type="number" step="0.01" value="50"></div></div>
@@ -283,7 +283,7 @@ tr:last-child td { border-bottom: 0; }
    <div class="btns" style="margin-top:12px"><button class="btn ok" onclick="saveOrder()">Save Sale Order</button><button class="btn pri" onclick="printOrder()">Sale Order PDF</button><button class="btn warn" onclick="waApproval()">Manager Approval WhatsApp</button><button class="btn" onclick="copyScript()">Copy Close Script</button></div>
    <div class="note" id="script" style="margin-top:12px"></div>
   </div>
-  <div class="card"><div id="mood" class="mood min"><div><b id="mt">Minimum Zone</b><p id="md">Price check කරන්න.</p></div><div class="emoji" id="me">😟</div></div><br><table class="out"><thead><tr><th>Output</th><th>Formula / Result</th><th class="meaning">Meaning</th></tr></thead><tbody id="out"></tbody></table></div>
+  <div class="card"><div id="mood" class="mood"><div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%;"><b id="mt" style="margin-bottom:8px;">Pending Input</b><p id="md" style="margin:0; color:var(--mut);">Select a customer and an item to begin.</p></div><div class="emoji" id="me" style="display:none;">⏳</div></div><br><table class="out"><thead><tr><th>Output</th><th>Formula / Result</th><th class="meaning">Meaning</th></tr></thead><tbody id="out"></tbody></table></div>
  </div></section>
 
  <section id="orders" class="sec"><div class="card"><h2 class="title">Sale Orders <span class="pill">Device Live Session Data</span></h2><div class="row3"><div class="field"><label>Search</label><input id="osearch" oninput="renderOrders()" placeholder="SO / customer / item"></div><div class="field"><label>Status</label><select id="ofilter" onchange="renderOrders()"><option value="">All</option><option>Open</option><option>Confirmed</option><option>Order Entered</option><option>Cancelled</option></select></div><div class="field"><label>&nbsp;</label><button class="btn" onclick="exportOrders()">Export CSV</button></div></div><div class="tblwrap"><table style="min-width: 800px;"><thead><tr><th>SO No</th><th>Date</th><th>Customer</th><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th>Status</th><th>Payment</th><th>PDF</th></tr></thead><tbody id="orderbody"></tbody></table></div></div></section>
@@ -400,9 +400,25 @@ async function fetchFromBPOS(){
   }
 }
 
-function item(){return data.items.find(x=>x.id==document.getElementById('item').value)||data.items[0]}
-function cust(){let v=document.getElementById('customer').value;return v=='walk'?{id:'walk',name:'Walk-in Customer',phone:'',cat:'c50'}:data.cust.find(x=>x.id==v)||{id:'walk',name:'Walk-in Customer',phone:'',cat:'c50'}}
-function cat(){return data.cats.find(x=>x.id==document.getElementById('category').value)||data.cats[2]}
+function item(){
+  let v = document.getElementById('item').value;
+  if(!v) return null;
+  return data.items.find(x=>x.id==v) || null;
+}
+
+function cust(){
+  let v = document.getElementById('customer').value;
+  if(!v) return null;
+  if(v === 'walk') return {id:'walk',name:'Walk-in Customer',phone:'',cat:'c50'};
+  return data.cust.find(x=>x.id==v) || null;
+}
+
+function cat(){
+  let v = document.getElementById('category').value;
+  if(!v) return null;
+  return data.cats.find(x=>x.id==v) || data.cats[2];
+}
+
 function priceAt(it,ct){return n(it.min)+(n(it.sys)-n(it.min))*n(ct.pct)/100}
 
 /* Smart Suggestion Logic Controls */
@@ -419,7 +435,7 @@ function selectCustomer(id, name) {
   document.getElementById('customer').value = id;
   document.getElementById('cust_input').value = name;
   document.getElementById('cust_suggest').style.display = 'none';
-  let c = cust(); if(c.cat) document.getElementById('category').value = c.cat;
+  let c = cust(); if(c && c.cat) document.getElementById('category').value = c.cat;
   applyCat();
 }
 
@@ -436,7 +452,8 @@ function selectItem(id, name) {
   document.getElementById('item_input').value = name;
   document.getElementById('item_suggest').style.display = 'none';
   renderCatOptions();
-  applyCat();
+  let ct = document.getElementById('category').value;
+  if (ct) { applyCat(); }
 }
 
 // Global click alignment to close open suggestions boxes safely
@@ -448,15 +465,7 @@ document.addEventListener('click', function(e) {
 function init(){
   if(!data.items || data.items.length === 0) data.items = baseItems;
   
-  // Set default initial labels for suggestion inputs
-  if(!document.getElementById('item').value && data.items[0]) {
-    document.getElementById('item').value = data.items[0].id;
-    document.getElementById('item_input').value = data.items[0].name;
-  }
-  if(document.getElementById('customer').value === 'walk') {
-    document.getElementById('cust_input').value = 'Walk-in Customer';
-  }
-
+  // NOTE: Initial prefilling removed by request. Inputs start blank.
   renderCatOptions();
   document.getElementById('comm').value=data.defcomm||50;
   save();
@@ -467,13 +476,21 @@ function init(){
 }
 
 function renderCatOptions(){
-  let it=item()||data.items[0];
-  if(!it) return;
+  let it=item();
+  if(!it) {
+    document.getElementById('category').innerHTML = '<option value="">Select an Item First</option>';
+    return;
+  }
   let html=data.cats.map(c=>`<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)} - Rs.${m(priceAt(it,c))}</option>`).join('');
   document.getElementById('category').innerHTML=html;
-  document.getElementById('ccat').innerHTML=data.cats.map(c=>`<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)} (${c.pct}%)</option>`).join('')}
+}
 
-function applyCat(){let it=item(),ct=cat();if(!it)return;document.getElementById('price').value=priceAt(it,ct).toFixed(2);calc()}
+function applyCat(){
+  let it=item(),ct=cat();
+  if(!it || !ct) return;
+  document.getElementById('price').value=priceAt(it,ct).toFixed(2);
+  calc();
+}
 
 function status(gpct,price,min){
   if(price<min)return{cls:'below',t:'Below Minimum',e:'😭',d:'Manager approval නැතුව close කරන්න එපා.',a:'Manager approval required - below minimum'};
@@ -484,10 +501,24 @@ function status(gpct,price,min){
 }
 
 function calc(){
-  let it=item(),ct=cat(),qty=n(qtyEl().value),price=n(priceEl().value);if(!it)return;
+  let it=item(),ct=cat(),qty=n(qtyEl().value),price=n(priceEl().value);
+  if(!it || !ct) {
+    // Graceful fallback for blank state
+    document.getElementById('mood').className='mood';
+    mt.innerText='Pending Input';
+    md.innerText='Select a customer and an item to begin.';
+    me.style.display='none';
+    out.innerHTML='';
+    matrix.innerHTML='';
+    script.innerText='';
+    return;
+  }
+  
+  me.style.display='block';
   let min=n(it.min),sys=n(it.sys),gap=sys-min,gpct=gap?((price-min)/gap)*100:0,total=qty*price,minTot=qty*min,varProfit=Math.max(0,(price-min)*qty),risk=Math.max(0,(min-price)*qty),com=varProfit*n(commEl().value)/100,req=price?Math.ceil(n(targetEl().value)/price):0,st=status(gpct,price,min);
   document.getElementById('mood').className='mood '+st.cls;
   mt.innerText=st.t;md.innerText=st.d;me.innerText=st.e;
+  
   let rows=[['Minimum Price',m(min),'Lowest allowed price','redrow'],['System Price',m(sys),'Standard system retail',''],['Price Gap',m(gap),'Delta space',''],['Gap Used %',p(gpct),'Margin Utilization',''],['Total Sales',m(total),'Volume target','greenrow'],['Variation Profit',m(varProfit),'Profit margin metric',''],['Commission Amount',m(com),'Payout calculation',''],['Target Required Qty',req.toLocaleString('en-US')+' units','Break even parameter','']];
   out.innerHTML=rows.map(r=>`<tr class="${r[2]}"><td class="lab">${esc(r[0])}</td><td class="val">${esc(r[1])}</td><td class="meaning">${esc(r[2])}</td></tr>`).join('');
   matrix.innerHTML=data.cats.map(c=>`<div class="pricebox" onclick="setP(${priceAt(it,c).toFixed(2)},'${esc(c.id)}')"><b>${esc(c.emoji)} ${esc(c.name)}</b><div class="p">Rs.${m(priceAt(it,c))}</div></div>`).join('');
@@ -502,18 +533,36 @@ function setP(v,cid){priceEl().value=n(v).toFixed(2);document.getElementById('ca
 
 function makeScript(st,it,qty,price,min,total){
   let c=cust();
+  if(!c) return '';
   if(st.cls=='below')return`Manager approval requested.\nCustomer: ${c.name}\nItem: ${it.name}\nQty: ${qty} units\nTarget price: Rs.${m(price)}`;
   return`Dear ${c.name}, product item ${it.name} optimized deal price available at Rs.${m(price)} for a current volume metric allocation of ${qty} units. Total aggregate value is Rs.${m(total)}. Please confirm pipeline clearance.`;
 }
 
-function orderObj(){let it=item(),c=cust(),qty=n(qtyEl().value),price=n(priceEl().value),gap=n(it.sys)-n(it.min),gpct=gap?((price-n(it.min))/gap)*100:0,st=status(gpct,price,n(it.min));return{id:id('so'),so:'SO-'+nowName(),date:new Date().toISOString(),custId:c.id,cust:c.name,phone:c.phone||'',addr:c.addr||'',itemId:it.id,item:it.name,qty,price,total:qty*price,min:n(it.min),sys:n(it.sys),gpct,status:'Open',pay:document.getElementById('paynote').value,mood:st.e+' '+st.t,approval:st.a,cat:cat().name}}
+function orderObj(){
+  let it=item(),c=cust();
+  if(!it || !c) return null;
+  let qty=n(qtyEl().value),price=n(priceEl().value),gap=n(it.sys)-n(it.min),gpct=gap?((price-n(it.min))/gap)*100:0,st=status(gpct,price,n(it.min));
+  return{id:id('so'),so:'SO-'+nowName(),date:new Date().toISOString(),custId:c.id,cust:c.name,phone:c.phone||'',addr:c.addr||'',itemId:it.id,item:it.name,qty,price,total:qty*price,min:n(it.min),sys:n(it.sys),gpct,status:'Open',pay:document.getElementById('paynote').value,mood:st.e+' '+st.t,approval:st.a,cat:cat().name}
+}
 
-function saveOrder(){let o=orderObj();if(!o.qty||!o.price){alert('Check inputs');return}orders.unshift(o);saveOrders();renderCashSelect();alert('Sale order added locally: '+o.so)}
-function waApproval(){let o=orderObj(),msg=`Approval requirement statement for ${o.cust}. Item ${o.item} evaluated below limit threshold standard configuration.`;window.open(`https://wa.me/${(data.mgrwa||'').replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank')}
+function saveOrder(){
+  let o=orderObj();
+  if(!o) { alert('Please select a customer and an item first.'); return; }
+  if(!o.qty||!o.price){alert('Check inputs');return}
+  orders.unshift(o);saveOrders();renderCashSelect();alert('Sale order added locally: '+o.so)
+}
+
+function waApproval(){
+  let o=orderObj();
+  if(!o) { alert('Please select a customer and an item first.'); return; }
+  let msg=`Approval requirement statement for ${o.cust}. Item ${o.item} evaluated below limit threshold standard configuration.`;
+  window.open(`https://wa.me/${(data.mgrwa||'').replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`,'_blank')
+}
 function copyScript(){navigator.clipboard?navigator.clipboard.writeText(script.innerText).then(()=>alert('Text copied to clipboard')):alert(script.innerText)}
 
 function printOrder(id){
   let o=id?orders.find(x=>x.id==id):orderObj();
+  if(!o) { alert('Please select a customer and an item first.'); return; }
   printArea.innerHTML=`<div style="padding:20px;color:#000;background:#fff;"><h2>SALE ORDER</h2><hr/><p>Order Reference: ${esc(o.so)}</p><p>Account Client: ${esc(o.cust)}</p><p>Item Allocation: ${esc(o.item)} x ${o.qty}</p><p>Total Value: Rs.${m(o.total)}</p></div>`;
   setTimeout(()=>window.print(),150);
 }
