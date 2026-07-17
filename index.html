@@ -138,7 +138,6 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9, 174, 226, 0.2); background: #081324;
 }
 
-/* Suggestion Container Box styling */
 .suggest-box {
   position: absolute; top: 100%; left: 0; right: 0; background: #0d1f38;
   border: 1px solid var(--line); border-radius: 10px; max-height: 220px;
@@ -344,19 +343,31 @@ function tab(x){
   if(x=='admin') renderAdmin();
 }
 
+/* Pagination Loop Engine Fix */
 async function fetchFromBPOS(){
   const statusEl = document.getElementById('sync_status');
   const metaEl = document.getElementById('sync_meta');
-  statusEl.innerText = '⚡ Connecting to bPOS Stream...';
+  statusEl.innerText = '⚡ Loading deep bPOS records...';
   
   try {
     const headers = { 'X-API-Key': BPOS_KEY };
     
-    // Fetch Customers
-    const resCust = await fetch(`${BPOS_URL}/customers?per_page=100`, { headers });
-    const jsonCust = await resCust.json();
-    if(jsonCust.success && jsonCust.data) {
-      data.cust = jsonCust.data.map(c => ({
+    // Pagination loop for Customers
+    let allCustomers = [];
+    let custPage = 1;
+    let keepCustLoop = true;
+    
+    while(keepCustLoop) {
+      const resCust = await fetch(`${BPOS_URL}/customers?per_page=100&page=${custPage}`, { headers });
+      const jsonCust = await resCust.json();
+      if(jsonCust.success && jsonCust.data && jsonCust.data.length > 0) {
+        allCustomers = allCustomers.concat(jsonCust.data);
+        if(jsonCust.data.length < 100) { keepCustLoop = false; } else { custPage++; }
+      } else { keepCustLoop = false; }
+    }
+    
+    if(allCustomers.length > 0) {
+      data.cust = allCustomers.map(c => ({
         id: 'bpos-' + c.id,
         name: c.name,
         phone: c.phone || '',
@@ -365,14 +376,25 @@ async function fetchFromBPOS(){
         addr: '',
         note: 'Synced from bPOS platform'
       }));
-      document.getElementById('bpos_cust_count').innerText = `${jsonCust.data.length} ERP`;
+      document.getElementById('bpos_cust_count').innerText = `${allCustomers.length} ERP`;
     }
 
-    // Fetch Products
-    const resProd = await fetch(`${BPOS_URL}/products?per_page=100`, { headers });
-    const jsonProd = await resProd.json();
-    if(jsonProd.success && jsonProd.data) {
-      data.items = jsonProd.data.map(p => {
+    // Pagination loop for Products
+    let allProducts = [];
+    let prodPage = 1;
+    let keepProdLoop = true;
+    
+    while(keepProdLoop) {
+      const resProd = await fetch(`${BPOS_URL}/products?per_page=100&page=${prodPage}`, { headers });
+      const jsonProd = await resProd.json();
+      if(jsonProd.success && jsonProd.data && jsonProd.data.length > 0) {
+        allProducts = allProducts.concat(jsonProd.data);
+        if(jsonProd.data.length < 100) { keepProdLoop = false; } else { prodPage++; }
+      } else { keepProdLoop = false; }
+    }
+    
+    if(allProducts.length > 0) {
+      data.items = allProducts.map(p => {
         const sysVal = n(p.price?.amount || p.price || 0);
         return {
           id: p.code || id('it'),
@@ -392,7 +414,7 @@ async function fetchFromBPOS(){
     save();
     init();
     statusEl.innerText = '✅ bPOS Engine Synced Successfully';
-    metaEl.innerText = `Retrieved direct endpoints at ${new Date().toLocaleTimeString()}`;
+    metaEl.innerText = `Loaded ${allCustomers.length} clients and ${allProducts.length} line-items completely.`;
   } catch(e) {
     statusEl.innerText = '⚠️ bPOS API Standalone Fallback Active';
     metaEl.innerText = 'Connection paused. Displaying internal cache.';
@@ -421,7 +443,6 @@ function cat(){
 
 function priceAt(it,ct){return n(it.min)+(n(it.sys)-n(it.min))*n(ct.pct)/100}
 
-/* Smart Suggestion Logic Controls */
 function showCustomers() {
   let box = document.getElementById('cust_suggest');
   let val = document.getElementById('cust_input').value.toLowerCase();
@@ -456,7 +477,6 @@ function selectItem(id, name) {
   if (ct) { applyCat(); }
 }
 
-// Global click alignment to close open suggestions boxes safely
 document.addEventListener('click', function(e) {
   if(!e.target.closest('#cust_suggest') && e.target.id !== 'cust_input') { document.getElementById('cust_suggest').style.display = 'none'; }
   if(!e.target.closest('#item_suggest') && e.target.id !== 'item_input') { document.getElementById('item_suggest').style.display = 'none'; }
@@ -464,8 +484,6 @@ document.addEventListener('click', function(e) {
 
 function init(){
   if(!data.items || data.items.length === 0) data.items = baseItems;
-  
-  // NOTE: Initial prefilling removed by request. Inputs start blank.
   renderCatOptions();
   document.getElementById('comm').value=data.defcomm||50;
   save();
@@ -473,6 +491,7 @@ function init(){
   ['qty','price','comm','target','paynote'].forEach(x=>document.getElementById(x).oninput=calc);
   applyCat();
   renderCashSelect();
+  renderCustomers();
 }
 
 function renderCatOptions(){
@@ -503,7 +522,6 @@ function status(gpct,price,min){
 function calc(){
   let it=item(),ct=cat(),qty=n(qtyEl().value),price=n(priceEl().value);
   if(!it || !ct) {
-    // Graceful fallback for blank state
     document.getElementById('mood').className='mood';
     mt.innerText='Pending Input';
     md.innerText='Select a customer and an item to begin.';
@@ -590,6 +608,7 @@ function saveCustomer(){
   data.cust.push(c);save();clearCustomer();showCustomers();renderCustomers();
 }
 function renderCustomers(){
+  if(!data.cust) return;
   custbody.innerHTML=data.cust.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.phone)}</td><td>${esc(c.biz)}</td><td>Standard</td><td>-</td><td>Verified</td></tr>`).join('');
 }
 function clearCustomer(){['cid','cname','cphone','cbiz','caddr','cnote'].forEach(x=>document.getElementById(x).value='')}
@@ -628,7 +647,6 @@ function renderCats(){}
 function saveCat(){}
 function exportUpdate(){}
 
-// Engine ignition sequence
 init();
 fetchFromBPOS();
 </script>
