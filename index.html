@@ -398,8 +398,8 @@ async function fetchFromBPOS(){
         const sysVal = n(p.price?.amount || p.price || 0);
         return {
           id: p.code || id('it'),
-          // Fix: Check for english_name, fall back to standard name
-          name: p.english_name || p.name, 
+          // Fix: Check for ordaxa_name, fall back to standard name
+          name: p.ordaxa_name || (p.custom_fields && p.custom_fields.ordaxa_name) || p.name, 
           mat: p.category?.name || 'General',
           w: p.weight || 0,
           h: 0,
